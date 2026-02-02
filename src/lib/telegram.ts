@@ -21,7 +21,9 @@ export async function sendTelegramNotification(updates: PriceUpdate[]) {
   const chatId = process.env.TELEGRAM_CHAT_ID;
 
   if (!token || !chatId) {
-    console.warn("[Telegram] Missing TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID in environment variables.");
+    console.warn(
+      "[Telegram] Missing TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID in environment variables.",
+    );
     return;
   }
 
@@ -48,6 +50,8 @@ export async function sendTelegramNotification(updates: PriceUpdate[]) {
   });
 
   message += `_Otomatik sistem tarafından gönderilmiştir._`;
+  message += "\n\n";
+  message += "Website: https://altin.mrerenk.tr";
 
   const url = `https://api.telegram.org/bot${token}/sendMessage`;
 
