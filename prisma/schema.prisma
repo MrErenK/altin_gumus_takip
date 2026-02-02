@@ -1,0 +1,28 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model PriceRecord {
+  id        Int      @id @default(autoincrement())
+  symbol    String
+  buy       Float
+  sell      Float
+  createdAt DateTime @default(now())
+  change    Float?
+  direction String?
+  ratio     Float?
+
+  @@index([symbol])
+  @@index([createdAt])
+}
+
+model GlobalState {
+  id           Int      @id @default(1)
+  lastSyncedAt DateTime @default(now())
+  remaining    Int      @default(1000)
+}
