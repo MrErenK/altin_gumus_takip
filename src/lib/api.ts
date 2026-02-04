@@ -24,7 +24,7 @@ export async function fetchPrices(symbols: string[]): Promise<ApiResponse> {
   try {
     const response = await fetch(url, {
       headers: process.env.API_KEY ? { "X-Api-Key": process.env.API_KEY } : {},
-      next: { revalidate: 60 }, // Cache for 60 seconds
+      cache: "no-store",
     });
 
     if (!response.ok) {

@@ -33,6 +33,7 @@ export async function performPriceSync(force = false, notify = false) {
         success: true,
         message: "Skipping sync: Cooldown active",
         remaining: state.remaining,
+        updated: false,
       };
     }
 
@@ -45,8 +46,8 @@ export async function performPriceSync(force = false, notify = false) {
         symbol,
         buy: parseFloat(data.alis),
         sell: parseFloat(data.satis),
-        change: parseFloat(data.degisim),
-        ratio: parseFloat(data.oran.replace("%", "")),
+        change: parseFloat(data.oran.replace("%", "")),
+        ratio: parseFloat(data.degisim.replace("%", "")),
         direction: data.yon,
       }));
 
@@ -95,28 +96,43 @@ export async function performPriceSync(force = false, notify = false) {
 
         // Notify via Telegram if requested
         if (notify) {
-          console.log(
-            `[Sync] Triggering Telegram notification for ${changedRecords.length} symbols.`,
-          );
-          const telegramUpdates = changedRecords.map((r) => ({
-            symbol: r.symbol,
-            name: r.symbol === "GA" ? "Gram Altın" : "Gram Gümüş",
-            buy: r.buy,
-            sell: r.sell,
-            ratio: r.ratio || 0,
-            direction: r.direction || "moneyNone",
-            change: r.change || 0,
-          }));
-
-          const tgResult = await sendTelegramNotification(
-            telegramUpdates,
-          ).catch((err) => {
-            console.error("[Sync] Telegram notification error:", err);
-            return { success: false };
+          // 3. Filter out price changes between -0.99 and +0.99 (relative to last record)
+          const notableChanges = changedRecords.filter((record) => {
+            const last = latestRecords.find((l) => l?.symbol === record.symbol);
+            if (!last) return true;
+            // Use the absolute difference between current sell and last sell price
+            const diff = Math.abs(record.sell - last.sell);
+            return diff > 0.99;
           });
 
-          if (tgResult?.success) {
-            console.log("[Sync] Telegram notification sent successfully.");
+          if (notableChanges.length > 0) {
+            console.log(
+              `[Sync] Triggering Telegram notification for ${notableChanges.length} symbols.`,
+            );
+            const telegramUpdates = notableChanges.map((r) => ({
+              symbol: r.symbol,
+              name: r.symbol === "GA" ? "Gram Altın" : "Gram Gümüş",
+              buy: r.buy,
+              sell: r.sell,
+              ratio: r.ratio || 0,
+              direction: r.direction || "moneyNone",
+              change: r.change || 0,
+            }));
+
+            const tgResult = await sendTelegramNotification(
+              telegramUpdates,
+            ).catch((err) => {
+              console.error("[Sync] Telegram notification error:", err);
+              return { success: false };
+            });
+
+            if (tgResult?.success) {
+              console.log("[Sync] Telegram notification sent successfully.");
+            }
+          } else {
+            console.log(
+              "[Sync] No notable price changes (> 0.99₺) for Telegram notification.",
+            );
           }
         }
       } else {

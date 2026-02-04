@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { prisma } from "@/lib/prisma";
 import PriceChart from "@/components/PriceChart";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -21,23 +23,26 @@ async function getInitialData() {
 
   let remaining: number | null = null;
 
-  // Auto-sync if data is missing, older than threshold, or we don't have the 'remaining' count.
-  // Since fetchPrices has a 60s cache, this won't over-request the API on frequent refreshes.
-  if (
-    !latestGold ||
-    latestGold.createdAt < syncThreshold ||
-    remaining === null
-  ) {
+  // Auto-sync if data is missing or older than threshold.
+  // This ensures the page shows fresh data even if the background worker hasn't run yet.
+  if (!latestGold || latestGold.createdAt < syncThreshold) {
     try {
       const result = await performPriceSync();
-      if (result.success && "remaining" in result) {
-        remaining = result.remaining ?? null;
+      if (result.success && result.remaining !== undefined) {
+        remaining = result.remaining;
       }
     } catch (e) {
       console.error("Auto-sync failed during page load:", e);
     }
   }
 
+  // If we didn't sync or it failed to return remaining, fetch it from global state
+  if (remaining === null) {
+    const state = await prisma.globalState.findFirst({ where: { id: 1 } });
+    remaining = state?.remaining ?? null;
+  }
+
+  // Fetch the absolute latest prices from the database
   const [currentGA, currentGAG] = await Promise.all([
     prisma.priceRecord.findFirst({
       where: { symbol: "GA" },
