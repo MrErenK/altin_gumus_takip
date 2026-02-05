@@ -12,7 +12,7 @@ import { sendTelegramNotification } from "@/lib/telegram";
  * @param force If true, bypasses the time-based cooldown (but still checks for real changes).
  * @param notify If true, sends Telegram notifications on price changes.
  */
-export async function performPriceSync(force = false, notify = false) {
+export async function performPriceSync(force = false, notify = true) {
   try {
     const now = new Date();
 
@@ -96,18 +96,21 @@ export async function performPriceSync(force = false, notify = false) {
 
         // Notify via Telegram if requested
         if (notify) {
-          // 3. Filter out price changes between -0.99 and +0.99 (relative to last record)
+          // 3. Filter out small price changes
           const notableChanges = changedRecords.filter((record) => {
             const last = latestRecords.find((l) => l?.symbol === record.symbol);
             if (!last) return true;
             // Use the absolute difference between current sell and last sell price
             const diff = Math.abs(record.sell - last.sell);
-            return diff > 0.99;
+
+            // Thresholds: Gold (GA) >= 0.99, Silver (GAG) >= 0.50
+            const threshold = record.symbol === "GAG" ? 0.5 : 0.99;
+            return diff >= threshold;
           });
 
           if (notableChanges.length > 0) {
             console.log(
-              `[Sync] Triggering Telegram notification for ${notableChanges.length} symbols.`,
+              `[Sync] Triggering Telegram notification for symbols: ${notableChanges.map((n) => n.symbol).join(", ")}`,
             );
             const telegramUpdates = notableChanges.map((r) => ({
               symbol: r.symbol,
@@ -131,7 +134,7 @@ export async function performPriceSync(force = false, notify = false) {
             }
           } else {
             console.log(
-              "[Sync] No notable price changes (> 0.99₺) for Telegram notification.",
+              "[Sync] No notable price changes (thresholds: GA >= 0.99, GAG >= 0.50) for Telegram notification.",
             );
           }
         }

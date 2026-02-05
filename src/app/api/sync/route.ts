@@ -18,7 +18,7 @@ export async function GET(request: Request) {
   if (secretKey && key !== secretKey) {
     return NextResponse.json(
       { success: false, error: "Unauthorized" },
-      { status: 401 }
+      { status: 401 },
     );
   }
 
@@ -29,7 +29,7 @@ export async function GET(request: Request) {
     // 3. Save to DB if changed
     // 4. Send Telegram notification if changed
     // 5. Cleanup old records
-    const result = await performPriceSync(true);
+    const result = await performPriceSync(true, true);
 
     if (result.success) {
       return NextResponse.json({
@@ -40,14 +40,14 @@ export async function GET(request: Request) {
     } else {
       return NextResponse.json(
         { success: false, error: result.error },
-        { status: 500 }
+        { status: 500 },
       );
     }
   } catch (error) {
     console.error("[Cron API] Sync error:", error);
     return NextResponse.json(
       { success: false, error: "Internal Server Error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
