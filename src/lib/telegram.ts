@@ -16,7 +16,10 @@ interface PriceUpdate {
 /**
  * Sends a formatted price update message to Telegram.
  */
-export async function sendTelegramNotification(updates: PriceUpdate[]) {
+export async function sendTelegramNotification(
+  updates: PriceUpdate[],
+  isHourly = false,
+) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_CHAT_ID;
 
@@ -35,18 +38,27 @@ export async function sendTelegramNotification(updates: PriceUpdate[]) {
     year: "numeric",
   });
 
-  let message = `🔔 *Piyasa Güncellemesi*\n📅 ${dateStr}\n\n`;
+  let message = isHourly
+    ? `📊 *Saatlik Fiyat Özeti*\n📅 ${dateStr}\n\n`
+    : `🔔 *Piyasa Güncellemesi*\n📅 ${dateStr}\n\n`;
 
   updates.forEach((update) => {
-    const isUp = update.direction === "moneyUp";
-    const emoji = isUp ? "📈" : "📉";
-    const trend = isUp ? "Yükseliş" : "Düşüş";
-
     message += `*${update.name} (${update.symbol})*\n`;
-    message += `${emoji} Durum: ${trend} (%${Math.abs(update.ratio).toFixed(2)})\n`;
+
+    if (!isHourly) {
+      const isUp = update.direction === "moneyUp";
+      const emoji = isUp ? "📈" : "📉";
+      const trend = isUp ? "Yükseliş" : "Düşüş";
+      message += `${emoji} Durum: ${trend} (%${Math.abs(update.ratio).toFixed(2)})\n`;
+    }
+
     message += `💰 Satış: *${update.sell.toLocaleString("tr-TR", { minimumFractionDigits: 2 })}₺*\n`;
     message += `📥 Alış: ${update.buy.toLocaleString("tr-TR", { minimumFractionDigits: 2 })}₺\n`;
-    message += `📊 Değişim: ${update.change.toFixed(2)}₺\n\n`;
+
+    if (!isHourly) {
+      message += `📊 Değişim: ${update.change.toFixed(2)}₺\n`;
+    }
+    message += `\n`;
   });
 
   message += `_Otomatik sistem tarafından gönderilmiştir._`;

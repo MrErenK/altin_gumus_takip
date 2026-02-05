@@ -12,6 +12,9 @@ import { sendTelegramNotification } from "@/lib/telegram";
  * @param force If true, bypasses the time-based cooldown (but still checks for real changes).
  * @param notify If true, sends Telegram notifications on price changes.
  */
+let lastHourlyNotifyAt = 0;
+const lastNotifiedPrices: Record<string, number | undefined> = {};
+
 export async function performPriceSync(force = false, notify = true) {
   try {
     const now = new Date();
@@ -61,6 +64,33 @@ export async function performPriceSync(force = false, notify = true) {
         ),
       );
 
+      // 3. Hourly Price Notification (Every 1 hour)
+      // This runs independently of price changes to keep users informed
+      const oneHour = 60 * 60 * 1000;
+      if (notify && now.getTime() - lastHourlyNotifyAt >= oneHour) {
+        console.log("[Sync] Triggering hourly price summary.");
+        const telegramUpdates = records.map((r) => ({
+          symbol: r.symbol,
+          name: r.symbol === "GA" ? "Gram Altın" : "Gram Gümüş",
+          buy: r.buy,
+          sell: r.sell,
+          ratio: r.ratio || 0,
+          direction: r.direction || "moneyNone",
+          change: r.change || 0,
+        }));
+
+        await sendTelegramNotification(telegramUpdates, true).catch((err) =>
+          console.error("[Sync] Hourly Telegram notification error:", err),
+        );
+        lastHourlyNotifyAt = now.getTime();
+
+        // Update last notified prices to prevent immediate duplicate notification
+        records.forEach((r) => {
+          lastNotifiedPrices[r.symbol] = r.sell;
+        });
+      }
+
+      // 4. Update Database and handle movement-based notifications
       // Only save and notify if prices have actually changed
       const changedRecords = records.filter((record) => {
         const last = latestRecords.find((l) => l?.symbol === record.symbol);
@@ -96,14 +126,22 @@ export async function performPriceSync(force = false, notify = true) {
 
         // Notify via Telegram if requested
         if (notify) {
-          // 3. Filter out small price changes
+          // Filter out small price changes
+          // We compare against the last notified price to catch slow movements
           const notableChanges = changedRecords.filter((record) => {
-            const last = latestRecords.find((l) => l?.symbol === record.symbol);
-            if (!last) return true;
-            // Use the absolute difference between current sell and last sell price
-            const diff = Math.abs(record.sell - last.sell);
+            let lastBasePrice = lastNotifiedPrices[record.symbol];
 
-            // Thresholds: Gold (GA) >= 0.99, Silver (GAG) >= 0.50
+            // If no previous notification in this session, use the last record from DB
+            if (lastBasePrice === undefined) {
+              const last = latestRecords.find(
+                (l) => l?.symbol === record.symbol,
+              );
+              lastBasePrice = last?.sell;
+            }
+
+            if (lastBasePrice === undefined) return true;
+
+            const diff = Math.abs(record.sell - lastBasePrice);
             const threshold = record.symbol === "GAG" ? 0.5 : 0.99;
             return diff >= threshold;
           });
@@ -112,6 +150,10 @@ export async function performPriceSync(force = false, notify = true) {
             console.log(
               `[Sync] Triggering Telegram notification for symbols: ${notableChanges.map((n) => n.symbol).join(", ")}`,
             );
+            // Update last notified prices
+            notableChanges.forEach((n) => {
+              lastNotifiedPrices[n.symbol] = n.sell;
+            });
             const telegramUpdates = notableChanges.map((r) => ({
               symbol: r.symbol,
               name: r.symbol === "GA" ? "Gram Altın" : "Gram Gümüş",
